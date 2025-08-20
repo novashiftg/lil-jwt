@@ -96,7 +96,8 @@ checksum = "6a82ae493e598baaea5209805c49bbf2ea7de956d50d7da0da1164f9c6d28543"
 [[package]]
 name = "lil-json"
 version = "0.1.2"
-source = "git+https://github.com/master-hax/lil-json.git#e6460397761b4029406cd82f2b1ee890ec60cfa1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6edf55defc99143c6294b8b83c05a1f323967ce27663c0501195ae9aa6459e02"
 dependencies = [
  "embedded-io",
  "numtoa",
