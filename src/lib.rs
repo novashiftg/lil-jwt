@@ -122,20 +122,24 @@ pub enum JwtParseFailure {
     InvalidClaims(JsonParseFailure),
 }
 
+/// a struct that represents a JSON Web Token (RFC 7519)
 pub struct JsonWebToken<'a> {
     claims: &'a [JsonField<'a,'a>],
 }
 
 impl<'a> JsonWebToken<'a> {
 
+    /// construct a JsonWebToken from the provided claims
     pub fn from_claims(claims: &'a [JsonField<'a,'a>]) -> Self {
         Self { claims }
     }
 
+    /// serialize this JsonWebToken with the specified algorithm & secret into the provided output
     pub fn serialize<T: Write>(&self, output: T, algorithm: JwtType, secret: &[u8]) -> Result<usize,T::Error> {
         serialize_jwt(output, self.claims, &algorithm, secret)
     }
 
+    /// attempt to deserialize the claims of a JsonWebToken with the specified algorithm & secret from the provided data
     pub fn deserialize_claims<const MAX_CLAIMS: usize>(data: &'a[u8], base64buffer: &'a mut [u8], algorithm: JwtType, secret: &[u8]) -> Result<JsonObject<'a,MAX_CLAIMS>,JwtParseFailure> {
         let mut claims_buffer = [EMPTY_FIELD; MAX_CLAIMS];
         let num_claims = deserialize_jwt(data, &mut claims_buffer, &algorithm, secret, base64buffer)?;
