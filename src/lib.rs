@@ -1,7 +1,8 @@
-use core::str::FromStr;
-use core::convert::Infallible;
+#![no_std]
 
-use base64::{prelude::{BASE64_URL_SAFE, BASE64_URL_SAFE_NO_PAD}, DecodeError, DecodeSliceError, Engine};
+use core::{convert::Infallible, str::FromStr};
+
+use base64::{prelude::BASE64_URL_SAFE_NO_PAD, DecodeError, DecodeSliceError, Engine};
 use embedded_io::{ErrorType, Read, Write};
 
 use lil_json::{parse_json_object, serialize_json_object, JsonField, JsonObject, JsonParseFailure, JsonValue, EMPTY_FIELD};
@@ -20,23 +21,15 @@ mod authenticated_writer;
 
 #[cfg(feature = "signature")]
 struct Empty{}
-
 #[cfg(feature = "signature")]
 impl ErrorType for Empty {
     type Error = Infallible;
 }
-
 #[cfg(feature = "signature")]
 impl Write for Empty {
     fn write(& mut self, data: &[u8]) -> Result<usize, <Self as ErrorType>::Error> { Ok(data.len()) }
     fn flush(&mut self) -> Result<(), Self::Error> { Ok(()) }
 }
-
-#[cfg(feature = "signature")]
-impl Read for Empty {
-    fn read(&mut self, _: &mut [u8]) -> Result<usize, <Self as ErrorType>::Error> { Ok(0) }
-}
-
 
 #[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum SignatureAlgorithm {
