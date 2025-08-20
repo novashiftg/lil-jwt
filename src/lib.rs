@@ -1,21 +1,14 @@
-use core::{default, str::FromStr};
+use core::str::FromStr;
 
 use embedded_io::Write;
 use hmac::{Hmac, Mac};
-use lil_json::{parse_json_object, serialize_json_object, JsonField, JsonObject, JsonParseFailure, JsonValue};
+use lil_json::{serialize_json_object, JsonField, JsonObject, JsonParseFailure, JsonValue};
 use sha2::{Sha256, Sha384, Sha512};
 
 use crate::{authenticated_writer::AuthenticatedWriter, base64_writer::Base64UrlBlockEncoder};
 
 mod base64_writer;
 mod authenticated_writer;
-
-type DigestHS256 = Hmac<Sha256>;
-const OUTPUT_SIZE_HS256: usize = 32;
-type DigestHS384 = Hmac<Sha384>;
-const OUTPUT_SIZE_HS384: usize = 48;
-type DigestHS512 = Hmac<Sha512>;
-const OUTPUT_SIZE_HS512: usize = 64;
 
 #[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum SignatureAlgorithm {
@@ -172,7 +165,7 @@ fn parse_jwt<'a, const MAX_CLAIMS: usize>(data: &'a [u8]) -> Result<(usize,JsonO
     todo!()
 }
 
-fn serialize_object_base64<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'_,'_>]) -> Result<usize,T::Error> {
+fn serialize_object_base64<T: embedded_io::Write>(output: T, claims: &[JsonField<'_,'_>]) -> Result<usize,T::Error> {
     let mut body_encoder = Base64UrlBlockEncoder::new(output);
     serialize_json_object(&mut body_encoder, claims)?;
     body_encoder.finalize(false)
@@ -199,7 +192,7 @@ fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'_,'_
         },
         JwtAlgorithm::Signed(SignatureAlgorithm::HS256) => {
             // assert!(secret.len() >= 256);
-            let digest = DigestHS256::new_from_slice(secret).expect("invalid HS256 secret");
+            let digest = Hmac::<Sha256>::new_from_slice(secret).expect("invalid HS256 secret");
             let mut authenticated_writer = AuthenticatedWriter::new(&mut output, digest);
             ret += serialize_object_base64(&mut authenticated_writer, header.as_slice()).unwrap();
             authenticated_writer.write_all(b".")?;
@@ -213,7 +206,7 @@ fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'_,'_
         },
         JwtAlgorithm::Signed(SignatureAlgorithm::HS384) => {
             // assert!(secret.len() >= 384);
-            let digest = DigestHS384::new_from_slice(secret).expect("invalid HS384 secret");
+            let digest = Hmac::<Sha384>::new_from_slice(secret).expect("invalid HS384 secret");
             let mut authenticated_writer = AuthenticatedWriter::new(&mut output, digest);
             ret += serialize_object_base64(&mut authenticated_writer, header.as_slice()).unwrap();
             authenticated_writer.write_all(b".")?;
@@ -227,7 +220,7 @@ fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'_,'_
         },
         JwtAlgorithm::Signed(SignatureAlgorithm::HS512) => {
             // assert!(secret.len() >= 512);
-            let digest = DigestHS512::new_from_slice(secret).expect("invalid HS512 secret");
+            let digest = Hmac::<Sha512>::new_from_slice(secret).expect("invalid HS512 secret");
             let mut authenticated_writer = AuthenticatedWriter::new(&mut output, digest);
             ret += serialize_object_base64(&mut authenticated_writer, header.as_slice()).unwrap();
             authenticated_writer.write_all(b".")?;

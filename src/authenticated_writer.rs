@@ -1,6 +1,5 @@
 use embedded_io::{ErrorType, Write};
-use hmac::{digest::{self, CtOutput, FixedOutput, Update}, Hmac, Mac};
-use sha2::{Sha256, Sha384, Sha512};
+use hmac::{digest::{self, CtOutput, Update}, Mac};
 
 pub struct AuthenticatedWriter<T, D> {
     digest: D,
