@@ -1,0 +1,25 @@
+[package]
+name = "lil-jwt"
+version = "0.1.0"
+edition = "2021"
+readme = "README.md"
+repository = "https://github.com/master-hax/lil-jwt"
+license = "MIT OR Apache-2.0"
+description = "serialize & deserialize JSON Web Tokens (JWT)"
+documentation = "https://docs.rs/lil-json"
+keywords = ["jwt","json","jws"]
+categories = ["parsing", "no-std", "no-std::no-alloc", "embedded", "web-programming"]
+exclude = [
+    ".gitignore",
+]
+
+[dependencies]
+base64 = { version = "0.22.1", default-features = false }
+embedded-io = { version = "0.6.1", default-features = false }
+embedded-io-adapters = { version = "0.6.2", default-features = false, features = ["std"] }
+hmac = { version = "0.12.1", default-features = false }
+lil-json = { git = "https://github.com/master-hax/lil-json.git" }
+sha2 = { version = "0.10.9", default-features = false }
+
+[dev-dependencies]
+embedded-io-adapters = { version = "0.6.2", default-features = false, features = ["std"] }
