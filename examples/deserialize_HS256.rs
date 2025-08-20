@@ -1,4 +1,4 @@
-#[cfg(feature = "signing")]
+#[cfg(feature = "signature")]
 fn main() {
     use lil_json::{JsonField,JsonValue};
     use lil_jwt::{JsonWebToken, JwtType, SignatureAlgorithm};
@@ -18,7 +18,7 @@ fn main() {
     assert_eq!(JsonField::new("iat", JsonValue::Number(1516239022)), claims_slice[3]);
 }
 
-#[cfg(not(feature = "signing"))]
+#[cfg(not(feature = "signature"))]
 fn main () {
     panic!("the 'signing' feature must be enabled");
 }

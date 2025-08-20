@@ -1,4 +1,4 @@
-#[cfg(feature = "signing")]
+#[cfg(feature = "signature")]
 fn main() {
     use std::io::stdout;
     use embedded_io_adapters::std::FromStd;
@@ -19,7 +19,7 @@ fn main() {
     ).unwrap();
 }
 
-#[cfg(not(feature = "signing"))]
+#[cfg(not(feature = "signature"))]
 fn main () {
     panic!("the 'signing' feature must be enabled");
 }
