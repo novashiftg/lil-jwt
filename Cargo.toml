@@ -14,7 +14,7 @@ exclude = [
 ]
 
 [features]
-default = []
+default = [ "signature" ]
 signature = [ "dep:hmac","dep:sha2" ]
 sha2 = ["dep:sha2"]
 hmac = ["dep:hmac"]

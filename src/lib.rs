@@ -321,6 +321,7 @@ fn serialize_object_base64<T: embedded_io::Write>(output: T, claims: &[JsonField
     body_encoder.finalize(false)
 }
 
+#[cfg(feature = "signature")]
 fn serialize_slice_base64<T: embedded_io::Write>(output: T, slice: &[u8]) -> Result<usize,T::Error> {
     let mut slice_encoder = Base64UrlBlockEncoder::new(output);
     slice_encoder.write_all(slice)?;
