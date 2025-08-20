@@ -3,26 +3,36 @@ use core::convert::Infallible;
 
 use base64::{prelude::{BASE64_URL_SAFE, BASE64_URL_SAFE_NO_PAD}, DecodeError, DecodeSliceError, Engine};
 use embedded_io::{ErrorType, Read, Write};
-use hmac::{digest::Update, Hmac, Mac};
+
 use lil_json::{parse_json_object, serialize_json_object, JsonField, JsonObject, JsonParseFailure, JsonValue, EMPTY_FIELD};
-use sha2::{Sha256, Sha384, Sha512};
 
-use crate::{authenticated_writer::AuthenticatedWriter, base64_writer::Base64UrlBlockEncoder};
-
+use crate::base64_writer::Base64UrlBlockEncoder;
 mod base64_writer;
+
+#[cfg(feature = "signature")]
+use hmac::{Hmac, Mac};
+#[cfg(feature = "signature")]
+use sha2::{Sha256, Sha384, Sha512};
+#[cfg(feature = "signature")]
+use crate::authenticated_writer::AuthenticatedWriter;
+#[cfg(feature = "signature")]
 mod authenticated_writer;
 
+#[cfg(feature = "signature")]
 struct Empty{}
 
+#[cfg(feature = "signature")]
 impl ErrorType for Empty {
     type Error = Infallible;
 }
 
+#[cfg(feature = "signature")]
 impl Write for Empty {
     fn write(& mut self, data: &[u8]) -> Result<usize, <Self as ErrorType>::Error> { Ok(data.len()) }
     fn flush(&mut self) -> Result<(), Self::Error> { Ok(()) }
 }
 
+#[cfg(feature = "signature")]
 impl Read for Empty {
     fn read(&mut self, _: &mut [u8]) -> Result<usize, <Self as ErrorType>::Error> { Ok(0) }
 }
@@ -77,6 +87,7 @@ pub enum EncryptionAlgorithm {
 #[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum JwtType {
     Unsecured,
+    #[cfg(feature = "signature")]
     Signed(SignatureAlgorithm),
     Encrypted(EncryptionAlgorithm)
 }
@@ -85,6 +96,7 @@ impl JwtType {
     const fn as_static_string(&self) -> &'static str {
         match self {
             Self::Unsecured => "none",
+            #[cfg(feature = "signature")]
             Self::Signed(signature_algorithm) => signature_algorithm.as_static_string(),
             Self::Encrypted(_) => todo!(),
         }
@@ -92,10 +104,11 @@ impl JwtType {
     fn from_string(string: &str) -> Option<Self> {
         if string == "none" {
             return Some(Self::Unsecured);
-        } else if let Some(s) = SignatureAlgorithm::from_string(string) {
+        }
+        #[cfg(feature = "signature")]
+        if let Some(s) = SignatureAlgorithm::from_string(string) {
             return Some(JwtType::Signed(s))
         }
-        // TODO: encryption algorithms
         return None;
     }
 }
@@ -226,6 +239,7 @@ pub fn deserialize_jwt<'a>(data: &'a [u8], claims_buffer: &mut [JsonField<'a,'a>
             };
             Ok(num_claims)
         },
+        #[cfg(feature = "signature")]
         JwtType::Signed(SignatureAlgorithm::HS256) => {
             let digest = Hmac::<Sha256>::new_from_slice(secret).expect("invalid HS256 secret");
             let mac = digest
@@ -266,6 +280,7 @@ pub fn deserialize_jwt<'a>(data: &'a [u8], claims_buffer: &mut [JsonField<'a,'a>
             };
             Ok(num_claims)
         },
+        #[cfg(feature = "signature")]
         JwtType::Signed(SignatureAlgorithm::HS384) => {
             let digest = Hmac::<Sha384>::new_from_slice(secret).expect("invalid HS256 secret");
             let mac = digest
@@ -284,6 +299,7 @@ pub fn deserialize_jwt<'a>(data: &'a [u8], claims_buffer: &mut [JsonField<'a,'a>
             }
             todo!()
         },
+        #[cfg(feature = "signature")]
         JwtType::Signed(SignatureAlgorithm::HS512) => {
             let digest = Hmac::<Sha512>::new_from_slice(secret).expect("invalid HS256 secret");
             let mac = digest
@@ -331,6 +347,7 @@ pub fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'
             ret += 1;
             Ok(ret)
         },
+        #[cfg(feature = "signature")]
         JwtType::Signed(SignatureAlgorithm::HS256) => {
             // assert!(secret.len() >= 256);
             let digest = Hmac::<Sha256>::new_from_slice(secret).expect("invalid HS256 secret");
@@ -345,6 +362,7 @@ pub fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'
             ret += serialize_slice_base64(&mut output, &mac.into_bytes())?;
             Ok(ret)
         },
+        #[cfg(feature = "signature")]
         JwtType::Signed(SignatureAlgorithm::HS384) => {
             // assert!(secret.len() >= 384);
             let digest = Hmac::<Sha384>::new_from_slice(secret).expect("invalid HS384 secret");
@@ -359,6 +377,7 @@ pub fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'
             ret += serialize_slice_base64(&mut output, &mac.into_bytes())?;
             Ok(ret)
         },
+        #[cfg(feature = "signature")]
         JwtType::Signed(SignatureAlgorithm::HS512) => {
             // assert!(secret.len() >= 512);
             let digest = Hmac::<Sha512>::new_from_slice(secret).expect("invalid HS512 secret");
@@ -376,7 +395,6 @@ pub fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'
         JwtType::Encrypted(_) => todo!(),
     }
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -1,9 +1,10 @@
-use std::io::stdout;
-use embedded_io_adapters::std::FromStd;
-use lil_json::{JsonObject, JsonValue};
-use lil_jwt::{JsonWebToken, JwtType, SignatureAlgorithm};
-
+#[cfg(feature = "signing")]
 fn main() {
+    use std::io::stdout;
+    use embedded_io_adapters::std::FromStd;
+    use lil_json::{JsonObject, JsonValue};
+    use lil_jwt::{JsonWebToken, JwtType, SignatureAlgorithm};
+
     let stdout = FromStd::new(stdout());
     let mut json_object = JsonObject::<10>::new();
     json_object.push_field("sub", JsonValue::String("1234567890")).unwrap();
@@ -17,4 +18,9 @@ fn main() {
         JwtType::Signed(SignatureAlgorithm::HS384),
         b"a-valid-string-secret-that-is-at-least-384-bits-long"
     ).unwrap();
+}
+
+#[cfg(not(feature = "signing"))]
+fn main () {
+    panic!("the 'signing' feature must be enabled");
 }
