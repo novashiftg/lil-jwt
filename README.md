@@ -4,6 +4,8 @@ lil `#![no_std]` Rust crate to parse & serialize secure JSON Web Tokens (JWT) [[
 
 WARNING: the cryptography in this repository has not been independently verified, and there is no guarantee that it works. do not use this for anything critical.
 
+try out the examples at [jwt.io](https://www.jwt.io/)
+
 example JWT serialization with HS256 signature algorithm:
 ```rust
 use lil_json::{JsonObject, JsonValue};
