@@ -95,8 +95,8 @@ checksum = "6a82ae493e598baaea5209805c49bbf2ea7de956d50d7da0da1164f9c6d28543"
 
 [[package]]
 name = "lil-json"
-version = "0.1.1"
-source = "git+https://github.com/master-hax/lil-json.git#3787a534d731761a329012063fcacac71b7626ac"
+version = "0.1.2"
+source = "git+https://github.com/master-hax/lil-json.git#e6460397761b4029406cd82f2b1ee890ec60cfa1"
 dependencies = [
  "embedded-io",
  "numtoa",

@@ -376,3 +376,17 @@ pub fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'
         JwtType::Encrypted(_) => todo!(),
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+     #[test]
+    fn test_serialize_unsecured_empty() {
+        let mut buffer = [0_u8; 256];
+        let n = JsonWebToken::from_claims(&[]).serialize(buffer.as_mut_slice(), JwtType::Unsecured, &[]).unwrap();
+        assert_eq!(b"eyJhbGciOiJub25lIn0.e30.", buffer.split_at(n).0)
+    }
+
+}
