@@ -1,14 +1,32 @@
 use core::str::FromStr;
+use core::convert::Infallible;
 
-use embedded_io::Write;
-use hmac::{Hmac, Mac};
-use lil_json::{serialize_json_object, JsonField, JsonObject, JsonParseFailure, JsonValue};
+use base64::{prelude::{BASE64_URL_SAFE, BASE64_URL_SAFE_NO_PAD}, DecodeError, DecodeSliceError, Engine};
+use embedded_io::{ErrorType, Read, Write};
+use hmac::{digest::Update, Hmac, Mac};
+use lil_json::{parse_json_object, serialize_json_object, JsonField, JsonObject, JsonParseFailure, JsonValue, EMPTY_FIELD};
 use sha2::{Sha256, Sha384, Sha512};
 
 use crate::{authenticated_writer::AuthenticatedWriter, base64_writer::Base64UrlBlockEncoder};
 
 mod base64_writer;
 mod authenticated_writer;
+
+struct Empty{}
+
+impl ErrorType for Empty {
+    type Error = Infallible;
+}
+
+impl Write for Empty {
+    fn write(& mut self, data: &[u8]) -> Result<usize, <Self as ErrorType>::Error> { Ok(data.len()) }
+    fn flush(&mut self) -> Result<(), Self::Error> { Ok(()) }
+}
+
+impl Read for Empty {
+    fn read(&mut self, _: &mut [u8]) -> Result<usize, <Self as ErrorType>::Error> { Ok(0) }
+}
+
 
 #[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum SignatureAlgorithm {
@@ -57,13 +75,13 @@ pub enum EncryptionAlgorithm {
 }
 
 #[derive(Debug,PartialEq,Eq,Clone,Copy)]
-pub enum JwtAlgorithm {
+pub enum JwtType {
     Unsecured,
     Signed(SignatureAlgorithm),
     Encrypted(EncryptionAlgorithm)
 }
 
-impl JwtAlgorithm {
+impl JwtType {
     const fn as_static_string(&self) -> &'static str {
         match self {
             Self::Unsecured => "none",
@@ -75,30 +93,18 @@ impl JwtAlgorithm {
         if string == "none" {
             return Some(Self::Unsecured);
         } else if let Some(s) = SignatureAlgorithm::from_string(string) {
-            return Some(JwtAlgorithm::Signed(s))
+            return Some(JwtType::Signed(s))
         }
         // TODO: encryption algorithms
         return None;
     }
 }
 
-// pub struct JwtSerializationConfig {
-//     include_typ_in_header: bool,
-// }
-
-// impl Default for JwtSerializationConfig {
-//     fn default() -> Self { 
-//         Self { include_typ_in_header: true }
-//      }
-// }
-
-// pub struct JwtDeserializationConfig {
-//     require_typ_in_header: bool,
-// }
-
+#[derive(Debug)]
 pub enum JwtParseFailure {
     NotEnoughDots,
-    NonBase64UrlData,
+    InvalidBase64Url(DecodeError),
+    Base64BufferTooSmall,
     InvalidSignature,
     // InvalidEncryption,
     AlgorithmMismatch,
@@ -108,26 +114,31 @@ pub enum JwtParseFailure {
 }
 
 pub struct JsonWebToken<'a> {
-    extra_header_fields: Option<&'a [JsonField<'a,'a>]>,
     claims: &'a [JsonField<'a,'a>],
 }
 
 impl<'a> JsonWebToken<'a> {
 
     pub fn from_claims(claims: &'a [JsonField<'a,'a>]) -> Self {
-        Self { claims, extra_header_fields: None }
+        Self { claims }
     }
 
-    pub fn serialize<T: Write>(&self, output: T, algorithm: JwtAlgorithm, secret: &[u8]) -> Result<usize,T::Error> {
+    pub fn serialize<T: Write>(&self, output: T, algorithm: JwtType, secret: &[u8]) -> Result<usize,T::Error> {
         serialize_jwt(output, self.claims, &algorithm, secret)
     }
 
-    pub fn deserialize_claims<const MAX_CLAIMS: usize>(data: &'a[u8]) -> Result<(usize,JsonObject<'a,MAX_CLAIMS>),JwtParseFailure> {
-        todo!()
+    pub fn deserialize_claims<const MAX_CLAIMS: usize>(data: &'a[u8], base64buffer: &'a mut [u8], algorithm: JwtType, secret: &[u8]) -> Result<JsonObject<'a,MAX_CLAIMS>,JwtParseFailure> {
+        let mut claims_buffer = [EMPTY_FIELD; MAX_CLAIMS];
+        let num_claims = deserialize_jwt(data, &mut claims_buffer, &algorithm, secret, base64buffer)?;
+        let mut ret = JsonObject::<MAX_CLAIMS>::new();
+        for claim in claims_buffer.split_at(num_claims).0 {
+            ret.push(*claim).expect("ret holds MAX_CLAIMS");
+        }
+        Ok(ret)
     }
 }
 
-const fn get_jose_header(include_typ_header: bool, algorithm: &JwtAlgorithm) -> JsonObject<'static,2> {
+const fn get_jose_header(include_typ_header: bool, algorithm: &JwtType) -> JsonObject<'static,2> {
     let mut ret = JsonObject::<2>::new();
     match ret.push_field("alg", JsonValue::String(algorithm.as_static_string())) {
         Ok(()) => {},
@@ -156,13 +167,143 @@ fn split_jwt_parts(data: &[u8]) -> Result<(&[u8],&[u8],&[u8]),JwtParseFailure>  
         None => return Err(JwtParseFailure::NotEnoughDots),
     };
     let (header_slice, after_header) = data.split_at(first_dot);
-    let (body_slice, after_claims) = after_header.split_at(first_dot - second_dot + 1); // skip the dot
-    let signature_slice = after_claims.split_at(1).1; // skip the dot
+    let (body_with_dot, signature_with_dot) = after_header.split_at(second_dot - first_dot);
+    let body_slice = body_with_dot.split_at(1).1;
+    let signature_slice = signature_with_dot.split_at(1).1;
     Ok((header_slice,body_slice,signature_slice))
 }
 
-fn parse_jwt<'a, const MAX_CLAIMS: usize>(data: &'a [u8]) -> Result<(usize,JsonObject<'a,MAX_CLAIMS>),JwtParseFailure> {
-    todo!()
+fn verify_jose_header(header_fields: &[JsonField<'_,'_>], expected_algorithm: &JwtType) -> Result<(),JwtParseFailure> {
+    let mut alg_header: Option<&str> = None;
+    for header_field in header_fields {
+        if header_field.key == "alg" {
+            match header_field.value {
+                JsonValue::String(alg_value) => {
+                    match alg_header.replace(alg_value) {
+                        None => {},
+                        Some(_duplicate_alg_header) => return Err(JwtParseFailure::IncorrectHeader),
+                    }
+                },
+                _ => return Err(JwtParseFailure::IncorrectHeader)
+            }
+        }
+    }
+    let alg_header_value = match alg_header {
+        None => return Err(JwtParseFailure::IncorrectHeader),
+        Some(v) => v,
+    };
+    if alg_header_value != expected_algorithm.as_static_string() {
+        return Err(JwtParseFailure::AlgorithmMismatch);
+    }
+    Ok(())
+}
+
+pub fn deserialize_jwt<'a>(data: &'a [u8], claims_buffer: &mut [JsonField<'a,'a>], algorithm: &JwtType, secret: &[u8], base64buffer: &'a mut [u8]) -> Result<usize,JwtParseFailure> {
+    let (header_b64,body_b64,signature_b64) = split_jwt_parts(data)?;
+    match algorithm {
+        JwtType::Unsecured => {
+             let header_decoded_end = match BASE64_URL_SAFE_NO_PAD.decode_slice(header_b64, base64buffer) {
+                Ok(n) => n,
+                Err(DecodeSliceError::OutputSliceTooSmall) => return Err(JwtParseFailure::Base64BufferTooSmall),
+                Err(DecodeSliceError::DecodeError(e)) => return Err(JwtParseFailure::InvalidBase64Url(e)),
+            };
+            let (decoded_header,remaining_base64_buffer) = base64buffer.split_at_mut(header_decoded_end);
+            let body_decoded_end = match BASE64_URL_SAFE_NO_PAD.decode_slice(body_b64, remaining_base64_buffer) {
+                Ok(n) => n,
+                Err(DecodeSliceError::OutputSliceTooSmall) => return Err(JwtParseFailure::Base64BufferTooSmall),
+                Err(DecodeSliceError::DecodeError(e)) => return Err(JwtParseFailure::InvalidBase64Url(e)),
+            };
+            let decoded_claims = remaining_base64_buffer.split_at(body_decoded_end).0;
+            let mut header_buffer = [EMPTY_FIELD; 5];
+            let (_num_data,num_header_fields) = match parse_json_object(decoded_header, &mut header_buffer) {
+                Ok(n) => n,
+                Err(j) => return Err(JwtParseFailure::InvalidHeader(j)),
+            };
+            verify_jose_header(header_buffer.split_at(num_header_fields).0, algorithm)?;
+            let num_claims = match parse_json_object(decoded_claims, claims_buffer) {
+                Ok((_num_bytes,n)) => n,
+                Err(j) => return Err(JwtParseFailure::InvalidClaims(j)),
+            };
+            Ok(num_claims)
+        },
+        JwtType::Signed(SignatureAlgorithm::HS256) => {
+            let digest = Hmac::<Sha256>::new_from_slice(secret).expect("invalid HS256 secret");
+            let mac = digest
+            .chain_update(header_b64)
+            .chain_update(b".")
+            .chain_update(body_b64)
+            .finalize()
+            .into_bytes();
+            let signature_decoded_end = match BASE64_URL_SAFE_NO_PAD.decode_slice(signature_b64, base64buffer) {
+                Ok(n) => n,
+                Err(DecodeSliceError::OutputSliceTooSmall) => return Err(JwtParseFailure::Base64BufferTooSmall),
+                Err(DecodeSliceError::DecodeError(e)) => return Err(JwtParseFailure::InvalidBase64Url(e)),
+            };
+            if signature_decoded_end != 32 || mac.as_slice() != base64buffer.split_at(signature_decoded_end).0 {
+                return Err(JwtParseFailure::InvalidSignature);
+            }
+            let header_decoded_end = match BASE64_URL_SAFE_NO_PAD.decode_slice(header_b64, base64buffer) {
+                Ok(n) => n,
+                Err(DecodeSliceError::OutputSliceTooSmall) => return Err(JwtParseFailure::Base64BufferTooSmall),
+                Err(DecodeSliceError::DecodeError(e)) => return Err(JwtParseFailure::InvalidBase64Url(e)),
+            };
+            let (decoded_header,remaining_base64_buffer) = base64buffer.split_at_mut(header_decoded_end);
+            let body_decoded_end = match BASE64_URL_SAFE_NO_PAD.decode_slice(body_b64, remaining_base64_buffer) {
+                Ok(n) => n,
+                Err(DecodeSliceError::OutputSliceTooSmall) => return Err(JwtParseFailure::Base64BufferTooSmall),
+                Err(DecodeSliceError::DecodeError(e)) => return Err(JwtParseFailure::InvalidBase64Url(e)),
+            };
+            let decoded_claims = remaining_base64_buffer.split_at(body_decoded_end).0;
+            let mut header_buffer = [EMPTY_FIELD; 5];
+            let (_num_data,num_header_fields) = match parse_json_object(decoded_header, &mut header_buffer) {
+                Ok(n) => n,
+                Err(j) => return Err(JwtParseFailure::InvalidHeader(j)),
+            };
+            verify_jose_header(header_buffer.split_at(num_header_fields).0, algorithm)?;
+            let num_claims = match parse_json_object(decoded_claims, claims_buffer) {
+                Ok((_num_bytes,n)) => n,
+                Err(j) => return Err(JwtParseFailure::InvalidClaims(j)),
+            };
+            Ok(num_claims)
+        },
+        JwtType::Signed(SignatureAlgorithm::HS384) => {
+            let digest = Hmac::<Sha384>::new_from_slice(secret).expect("invalid HS256 secret");
+            let mac = digest
+            .chain_update(header_b64)
+            .chain_update(b".")
+            .chain_update(body_b64)
+            .finalize()
+            .into_bytes();
+            let signature_decoded_end = match BASE64_URL_SAFE_NO_PAD.decode_slice(signature_b64, base64buffer) {
+                Ok(n) => n,
+                Err(DecodeSliceError::OutputSliceTooSmall) => return Err(JwtParseFailure::Base64BufferTooSmall),
+                Err(DecodeSliceError::DecodeError(e)) => return Err(JwtParseFailure::InvalidBase64Url(e)),
+            };
+            if signature_decoded_end != 48 || mac.as_slice() != base64buffer.split_at(signature_decoded_end).0 {
+                return Err(JwtParseFailure::InvalidSignature);
+            }
+            todo!()
+        },
+        JwtType::Signed(SignatureAlgorithm::HS512) => {
+            let digest = Hmac::<Sha512>::new_from_slice(secret).expect("invalid HS256 secret");
+            let mac = digest
+            .chain_update(header_b64)
+            .chain_update(b".")
+            .chain_update(body_b64)
+            .finalize()
+            .into_bytes();
+            let signature_decoded_end = match BASE64_URL_SAFE_NO_PAD.decode_slice(signature_b64, base64buffer) {
+                Ok(n) => n,
+                Err(DecodeSliceError::OutputSliceTooSmall) => return Err(JwtParseFailure::Base64BufferTooSmall),
+                Err(DecodeSliceError::DecodeError(e)) => return Err(JwtParseFailure::InvalidBase64Url(e)),
+            };
+            if signature_decoded_end != 64 || mac.as_slice() != base64buffer.split_at(signature_decoded_end).0 {
+                return Err(JwtParseFailure::InvalidSignature);
+            }
+            todo!()
+        },
+        _ => todo!()
+    }
 }
 
 fn serialize_object_base64<T: embedded_io::Write>(output: T, claims: &[JsonField<'_,'_>]) -> Result<usize,T::Error> {
@@ -177,11 +318,11 @@ fn serialize_slice_base64<T: embedded_io::Write>(output: T, slice: &[u8]) -> Res
     slice_encoder.finalize(false)
 }
 
-fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'_,'_>], algorithm: &JwtAlgorithm, secret: &[u8]) -> Result<usize,T::Error> {
-    let header = get_jose_header(algorithm != &JwtAlgorithm::Unsecured, algorithm);
+pub fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'_,'_>], algorithm: &JwtType, secret: &[u8]) -> Result<usize,T::Error> {
+    let header = get_jose_header(algorithm != &JwtType::Unsecured, algorithm);
     let mut ret = 0;
     match algorithm {
-        JwtAlgorithm::Unsecured => {
+        JwtType::Unsecured => {
             ret += serialize_object_base64(&mut output, header.as_slice())?;
             output.write_all(b".")?;
             ret += 1;
@@ -190,7 +331,7 @@ fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'_,'_
             ret += 1;
             Ok(ret)
         },
-        JwtAlgorithm::Signed(SignatureAlgorithm::HS256) => {
+        JwtType::Signed(SignatureAlgorithm::HS256) => {
             // assert!(secret.len() >= 256);
             let digest = Hmac::<Sha256>::new_from_slice(secret).expect("invalid HS256 secret");
             let mut authenticated_writer = AuthenticatedWriter::new(&mut output, digest);
@@ -204,7 +345,7 @@ fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'_,'_
             ret += serialize_slice_base64(&mut output, &mac.into_bytes())?;
             Ok(ret)
         },
-        JwtAlgorithm::Signed(SignatureAlgorithm::HS384) => {
+        JwtType::Signed(SignatureAlgorithm::HS384) => {
             // assert!(secret.len() >= 384);
             let digest = Hmac::<Sha384>::new_from_slice(secret).expect("invalid HS384 secret");
             let mut authenticated_writer = AuthenticatedWriter::new(&mut output, digest);
@@ -218,7 +359,7 @@ fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'_,'_
             ret += serialize_slice_base64(&mut output, &mac.into_bytes())?;
             Ok(ret)
         },
-        JwtAlgorithm::Signed(SignatureAlgorithm::HS512) => {
+        JwtType::Signed(SignatureAlgorithm::HS512) => {
             // assert!(secret.len() >= 512);
             let digest = Hmac::<Sha512>::new_from_slice(secret).expect("invalid HS512 secret");
             let mut authenticated_writer = AuthenticatedWriter::new(&mut output, digest);
@@ -232,48 +373,6 @@ fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'_,'_
             ret += serialize_slice_base64(&mut output, &mac.into_bytes())?;
             Ok(ret)
         },
-        JwtAlgorithm::Encrypted(_) => todo!(),
+        JwtType::Encrypted(_) => todo!(),
     }
 }
-
-
-    // fn serialize<T: embedded_io::Write>(&self, signature: SignatureAlgorithm, secret: &[u8], mut output: T) -> Result<usize, T::Error> {
-    //     // let body_slice = self.claims.fields.split_at(self.claims.num_fields).0;
-    //     let header = signature.get_header_base64url();
-    //     match signature {
-    //         SignatureAlgorithm::Unsecured => {
-    //             let mut ret = 0;
-    //             output.write_all(header.as_bytes())?;
-    //             ret += header.len();
-    //             output.write_all(b".")?;
-    //             ret += 1;
-    //             let mut encoder = Base64BlockEncoder::new(&mut output);
-    //             write_json_map(&mut encoder, self.claims.as_slice())?;
-    //             let body_length = encoder.finalize(false)?.0;
-    //             ret += body_length;
-    //             output.write_all(b".")?;
-    //             ret += 1;
-    //             Ok(ret)
-    //         },
-    //         SignatureAlgorithm::HS256 => {
-    //             let mut authenticator = AuthenticatedWriter::new(&mut output, HmacSha256::new_from_slice(secret).unwrap());
-    //             let mut ret = 0;
-    //             authenticator.write_all(header.as_bytes())?;
-    //             ret += header.len();
-    //             authenticator.write_all(b".")?;
-    //             ret += 1;
-    //             let mut body_encoder = Base64BlockEncoder::new(&mut authenticator);
-    //             write_json_map(&mut body_encoder, self.claims.as_slice())?;
-    //             let body_length = body_encoder.finalize(false)?.0;
-    //             ret += body_length;
-    //             let signature_out = authenticator.finalize_mac();
-    //             output.write_all(b".")?;
-    //             ret += 1;
-    //             let mut sig_writer = Base64BlockEncoder::new(&mut output);
-    //             sig_writer.write_all(&signature_out.into_bytes())?;
-    //             let signature_length = sig_writer.finalize(false)?.0;
-    //             ret += signature_length;
-    //             Ok(ret)
-    //         },
-    //     }
-    // }

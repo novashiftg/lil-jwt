@@ -1,7 +1,7 @@
 use std::io::stdout;
 use embedded_io_adapters::std::FromStd;
 use lil_json::{JsonObject, JsonValue};
-use lil_jwt::{JsonWebToken, JwtAlgorithm, SignatureAlgorithm};
+use lil_jwt::{JsonWebToken, JwtType, SignatureAlgorithm};
 
 fn main() {
     let stdout = FromStd::new(stdout());
@@ -14,7 +14,7 @@ fn main() {
         json_object.as_slice()
     ).serialize(
         stdout,
-        JwtAlgorithm::Signed(SignatureAlgorithm::HS384),
+        JwtType::Signed(SignatureAlgorithm::HS384),
         b"a-valid-string-secret-that-is-at-least-384-bits-long"
     ).unwrap();
 }

@@ -13,7 +13,7 @@ fn main() {
     JsonWebToken::from_claims(json_object.as_slice())
     .serialize(
         stdout,
-        lil_jwt::JwtAlgorithm::Signed(SignatureAlgorithm::HS256),
+        lil_jwt::JwtType::Signed(SignatureAlgorithm::HS256),
         b"a-valid-string-secret-that-is-at-least-512-bits-long-which-is-very-long"
     ).unwrap();
 }
