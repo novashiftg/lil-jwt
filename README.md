@@ -1,6 +1,6 @@
 # lil-jwt
 
-lil `#![no_std]` Rust crate to parse & serialize secure JSON Web Tokens (JWT)
+lil `#![no_std]` Rust crate to parse & serialize secure JSON Web Tokens (JWT) [[RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519)]
 
 WARNING: the cryptography in this repository has not been independently verified, and there is no guarantee that it works. do not use this for anything critical.
 
