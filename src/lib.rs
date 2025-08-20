@@ -3,12 +3,17 @@
 use core::{convert::Infallible, str::FromStr};
 
 use base64::{prelude::BASE64_URL_SAFE_NO_PAD, DecodeError, DecodeSliceError, Engine};
-use embedded_io::{ErrorType, Read, Write};
+use embedded_io::{ErrorType, Write};
 
-use lil_json::{parse_json_object, serialize_json_object, JsonField, JsonObject, JsonParseFailure, JsonValue, EMPTY_FIELD};
+use lil_json::{parse_json_object, serialize_json_object, JsonParseFailure, JsonValue, EMPTY_FIELD};
 
 use crate::base64_writer::Base64UrlBlockEncoder;
 mod base64_writer;
+
+/// (re-export from lil-json)
+pub use lil_json::JsonField;
+/// (re-export from lil-json)
+pub use lil_json::JsonObject;
 
 #[cfg(feature = "signature")]
 use hmac::{Hmac, Mac};
