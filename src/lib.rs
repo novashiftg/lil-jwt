@@ -232,7 +232,7 @@ fn serialize_jwt<T: embedded_io::Write>(mut output: T, claims: &[JsonField<'_,'_
             ret += serialize_slice_base64(&mut output, &mac.into_bytes())?;
             Ok(ret)
         },
-        _ => todo!(),
+        JwtAlgorithm::Encrypted(_) => todo!(),
     }
 }
 
