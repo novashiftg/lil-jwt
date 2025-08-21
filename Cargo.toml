@@ -28,3 +28,34 @@ sha2 = { version = "0.10.9", default-features = false, optional = true }
 
 [dev-dependencies]
 embedded-io-adapters = { version = "0.6.2", default-features = false, features = ["std"] }
+
+[[example]]
+name = "deserialize_unsecured"
+
+[[example]]
+name = "deserialize_HS256"
+required-features = ["signature"]
+
+[[example]]
+name = "deserialize_HS384"
+required-features = ["signature"]
+
+[[example]]
+name = "deserialize_HS512"
+required-features = ["signature"]
+
+[[example]]
+name = "serialize_unsecured"
+required-features = [ "embedded-io-adapters/std" ]
+
+[[example]]
+name = "serialize_HS256"
+required-features = ["signature", "embedded-io-adapters/std" ]
+
+[[example]]
+name = "serialize_HS384"
+required-features = ["signature", "embedded-io-adapters/std" ]
+
+[[example]]
+name = "serialize_HS512"
+required-features = ["signature", "embedded-io-adapters/std" ]
