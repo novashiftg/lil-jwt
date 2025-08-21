@@ -61,3 +61,7 @@ the following algorithms are currently supported:
 * none/unsecured
 * HS256
 
+TODO:
+- [ ] refactor HS256 to complete SHA384 and SHA512
+- [ ] alloc features (toString, etc)
+- [ ] customizable JWT headers
