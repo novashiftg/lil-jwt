@@ -65,3 +65,4 @@ TODO:
 - [ ] refactor HS256 to complete SHA384 and SHA512
 - [ ] alloc features (toString, etc)
 - [ ] customizable JWT headers
+- [ ] implement encryption
